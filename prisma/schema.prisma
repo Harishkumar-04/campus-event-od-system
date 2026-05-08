@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("STUDENT") // STUDENT, CLUB_ADMIN, FACULTY, SUPER_ADMIN, HOD
+  department    String?
+  facultyId     String?
+  rollNo        String?   @unique
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  administeredClubs Club[]
+  registrations     Registration[]
+  odRequests        ODRequest[]    @relation("StudentODs")
+  approvedODs       ODRequest[]    @relation("FacultyODs")
+  intercollegeODs   IntercollegeODRequest[] @relation("StudentIntercollegeODs")
+  approvedIntercollegeODs IntercollegeODRequest[] @relation("HODIntercollegeODs")
+}
+
+model Club {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  adminId     String
+  admin       User     @relation(fields: [adminId], references: [id])
+  events      Event[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Event {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  date        DateTime
+  startTime   String         @default("")
+  endTime     String         @default("")
+  location    String
+  capacity    Int
+  posterUrls  String?        // JSON stringified array of file paths
+  autoApproveOD Boolean      @default(false)
+  targetDepartments String?  // JSON stringified array of department codes
+  participantType String     @default("INDIVIDUAL") // INDIVIDUAL, TEAM
+  teamSize    Int            @default(1)
+  clubId      String
+  club        Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Registration {
+  id        String   @id @default(uuid())
+  eventId          String
+  studentId        String
+  teamName         String?
+  teamMembers      String?   // JSON stringified array of roll numbers
+  status           String   @default("REGISTERED") // REGISTERED, CANCELLED, WAITLISTED
+  attendanceStatus String   @default("PENDING") // PENDING, ATTENDED
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  student          User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  odRequest ODRequest?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, studentId])
+}
+
+model ODRequest {
+  id             String       @id @default(uuid())
+  registrationId String       @unique
+  studentId      String
+  facultyId      String?
+  status         String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  student        User         @relation("StudentODs", fields: [studentId], references: [id], onDelete: Cascade)
+  faculty        User?        @relation("FacultyODs", fields: [facultyId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model IntercollegeODRequest {
+  id             String   @id @default(uuid())
+  studentId      String
+  rollNo         String
+  teamMembers    String?   // JSON stringified array of {rollNo, name, department}
+  department     String
+  eventName      String
+  eventDate      DateTime
+  startTime      String?
+  endTime        String?
+  proofUrls      String   // JSON stringified array of file paths
+  odLetterUrls   String   @default("[]") // JSON stringified array of OD letter file paths
+  status         String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  hodId          String?
+  
+  student        User     @relation("StudentIntercollegeODs", fields: [studentId], references: [id], onDelete: Cascade)
+  hod            User?    @relation("HODIntercollegeODs", fields: [hodId], references: [id], onDelete: SetNull)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
